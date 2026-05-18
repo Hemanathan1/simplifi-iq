@@ -1,44 +1,30 @@
-/**
- * integrations/drive.js
- * Bonus: Archives the generated PDF to a Google Drive folder
- * Requires: GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_DRIVE_FOLDER_ID in .env
- */
-const { google } = require('googleapis');
-const { Readable } = require('stream');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
 
 async function driveUpload(pdfBuffer, lead, jobId) {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_DRIVE_FOLDER_ID) {
-    console.warn('[Drive] Skipping — GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_DRIVE_FOLDER_ID not set');
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_S3_BUCKET) {
+    console.warn('[S3] Skipping — credentials not set');
     return;
   }
 
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
-  });
-
-  const drive = google.drive({ version: 'v3', auth });
   const fileName = `${lead.company.replace(/[^a-zA-Z0-9]/g, '-')}-Audit-${Date.now()}.pdf`;
 
-  const stream = new Readable();
-  stream.push(pdfBuffer);
-  stream.push(null);
+  await s3.send(new PutObjectCommand({
+    Bucket: process.env.AWS_S3_BUCKET,
+    Key: `reports/${fileName}`,
+    Body: pdfBuffer,
+    ContentType: 'application/pdf',
+  }));
 
-  const res = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      mimeType: 'application/pdf',
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
-    },
-    media: {
-      mimeType: 'application/pdf',
-      body: stream,
-    },
-  });
-
-  console.log(`[Drive] Uploaded ${fileName} — ID: ${res.data.id}`);
-  return res.data.id;
+  console.log(`[S3] ✓ Uploaded ${fileName} to S3`);
+  return fileName;
 }
 
 module.exports = { driveUpload };

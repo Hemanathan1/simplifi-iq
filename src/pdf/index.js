@@ -1,14 +1,12 @@
 const htmlPdf = require('html-pdf-node');
-const { wrapInTemplate } = require('../ai/template');
 
 async function createPDF(reportHtml, lead) {
-  // Clean up any malformed CSS comments that break the PDF renderer
+  // Clean problematic CSS
   const cleanHtml = reportHtml
-    .replace(/\/\*(?![^*]*\*\/)[^*]*/g, '')  // remove unclosed /* comments
-    .replace(/<!--[\s\S]*?-->/g, '');          // remove HTML comments
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
 
-  const fullHtml = wrapInTemplate(cleanHtml, lead.company);
-  const file = { content: fullHtml };
+  const file = { content: cleanHtml };
   const options = {
     format: 'A4',
     printBackground: true,

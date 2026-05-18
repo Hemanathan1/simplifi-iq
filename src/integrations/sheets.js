@@ -1,42 +1,37 @@
-/**
- * integrations/sheets.js
- * Bonus: Logs each lead to a Google Sheet
- * Requires: GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_SHEETS_ID in .env
- */
-const { google } = require('googleapis');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+
+const client = new DynamoDBClient({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const docClient = DynamoDBDocumentClient.from(client);
 
 async function sheetsLog(lead, jobId) {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEETS_ID) {
-    console.warn('[Sheets] Skipping — GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SHEETS_ID not set');
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_DYNAMODB_TABLE) {
+    console.warn('[DynamoDB] Skipping — credentials not set');
     return;
   }
 
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-    range: 'Sheet1!A:F',
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values: [[
-        new Date().toISOString(),
-        lead.name,
-        lead.email,
-        lead.company,
-        lead.companyUrl || '',
-        jobId,
-        'completed',
-      ]],
+  await docClient.send(new PutCommand({
+    TableName: process.env.AWS_DYNAMODB_TABLE,
+    Item: {
+      jobId,
+      timestamp: new Date().toISOString(),
+      name: lead.name,
+      email: lead.email,
+      company: lead.company,
+      companyUrl: lead.companyUrl || '',
+      industry: lead.industry || '',
+      status: 'completed',
     },
-  });
+  }));
 
-  console.log(`[Sheets] Logged lead for ${lead.company}`);
+  console.log(`[DynamoDB] ✓ Logged lead for ${lead.company}`);
 }
 
 module.exports = { sheetsLog };

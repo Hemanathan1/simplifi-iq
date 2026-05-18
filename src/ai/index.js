@@ -1,8 +1,3 @@
-/**
- * ai/index.js
- * Generates personalized audit report using Google Gemini API (free tier)
- */
-
 const axios = require('axios');
 
 async function generateReport(lead, profile) {
@@ -21,62 +16,75 @@ async function generateReport(lead, profile) {
 
   // Extract HTML block if wrapped in ```html ... ```
   const htmlMatch = raw.match(/```html\s*([\s\S]*?)```/i);
-  return htmlMatch ? htmlMatch[1].trim() : raw.trim();
+  const html = htmlMatch ? htmlMatch[1].trim() : raw.trim();
+
+  // If response doesn't contain HTML tags, wrap it
+  if (!html.includes('<')) {
+    return `<div style="font-family:sans-serif;padding:40px;">
+      <h1>${lead.company} — Audit Report</h1>
+      <pre style="white-space:pre-wrap;">${html}</pre>
+    </div>`;
+  }
+
+  return html;
 }
 
 function buildPrompt(lead, p) {
-  const newsSection = p.recentNews?.length
-    ? p.recentNews.map((n) => `- ${n.date}: "${n.title}" (${n.source})`).join('\n')
-    : 'No recent news found.';
-
   const techSection = p.technologies?.length ? p.technologies.join(', ') : 'Not detected';
   const navSection  = p.scraped?.navItems?.length ? p.scraped.navItems.join(', ') : 'Not available';
+  const newsSection = p.recentNews?.length
+    ? p.recentNews.map((n) => `- "${n.title}" (${n.source})`).join('\n')
+    : 'No recent news found.';
 
-  return `
-You are an elite business analyst. Generate a complete professional HTML audit report for this company.
-Output ONLY valid HTML with inline <style> tags. No markdown, no explanations outside HTML.
+  return `You are an elite business analyst. Generate a complete professional HTML audit report.
 
-=== COMPANY INTEL ===
-Company:      ${p.name}
-Website:      ${p.website}
-Industry:     ${p.industry}
-Description:  ${p.description || p.scraped?.description || 'Not available'}
-Tagline:      ${p.tagline || p.scraped?.tagline || ''}
-Hero Heading: ${p.scraped?.heroHeading || ''}
-Location:     ${p.location || 'Not available'}
-Founded:      ${p.foundedYear || 'Not available'}
-Employees:    ${p.employees || 'Not available'}
-Tech Stack:   ${techSection}
-Nav Items:    ${navSection}
+CRITICAL RULES:
+- Output ONLY a complete HTML document starting with <!DOCTYPE html>
+- Include ALL styles inline inside a <style> tag in <head>
+- Do NOT use CSS comments (no /* */ anywhere)
+- Do NOT use markdown, backticks, or any text outside the HTML
+- Make it visually stunning and professional
 
-=== PROSPECT ===
-Name:    ${lead.name}
-Role:    ${lead.role || 'Not specified'}
-Email:   ${lead.email}
-Message: ${lead.message || 'None'}
+COMPANY DATA:
+- Company: ${p.name}
+- Website: ${p.website}
+- Industry: ${p.industry}
+- Description: ${p.description || p.scraped?.description || 'Not available'}
+- Tagline: ${p.tagline || ''}
+- Hero: ${p.scraped?.heroHeading || ''}
+- Location: ${p.location || 'Not available'}
+- Founded: ${p.foundedYear || 'Not available'}
+- Employees: ${p.employees || 'Not available'}
+- Tech Stack: ${techSection}
+- Products/Nav: ${navSection}
 
-=== RECENT NEWS ===
+PROSPECT:
+- Name: ${lead.name}
+- Role: ${lead.role || 'Not specified'}
+- Email: ${lead.email}
+- Message: ${lead.message || 'None'}
+
+NEWS:
 ${newsSection}
 
-=== REPORT SECTIONS REQUIRED ===
-1. HEADER — Company name, industry badge, date, website
-2. EXECUTIVE SUMMARY — 3-4 sentences specific to this company
-3. COMPANY OVERVIEW — Key facts in card grid (industry, location, founded, employees)
-4. DIGITAL PRESENCE AUDIT — Rate website, tech stack, social media (Strong/Moderate/Needs Attention)
-5. MARKET POSITIONING — Where they sit, likely competitors, differentiators
-6. GROWTH OPPORTUNITIES — 3 specific actionable opportunities for THIS company
-7. RECENT DEVELOPMENTS — News analysis or forward-looking section
-8. RECOMMENDATIONS — 3 concrete ways to help this specific company
-9. FOOTER — SimplifIQ branding
+Generate a complete HTML report with these sections:
+1. Header with company name, industry badge, date
+2. Executive Summary (3-4 sentences specific to ${p.name})
+3. Company Overview (cards: industry, location, founded, employees, website)
+4. Digital Presence Audit (rate website/tech/social as Strong/Moderate/Needs Attention)
+5. Market Positioning (competitors, differentiators)
+6. Growth Opportunities (3 specific opportunities for ${p.name})
+7. Recent Developments (news or forward-looking analysis)
+8. SimplifIQ Recommendations (3 concrete ways to help ${p.name})
+9. Footer with SimplifIQ branding
 
-=== DESIGN ===
-- Colors: Deep navy (#0f172a) + electric indigo (#6366f1) + white
-- Professional sans-serif fonts
-- Cards with shadows, rounded corners
-- Color-coded badges for ratings
-- A4 PDF optimized layout
-- Look like it was designed by a professional agency
-`;
+DESIGN:
+- Navy (#0f172a) + indigo (#6366f1) + white color scheme
+- Professional cards with borders and padding
+- Colored badges for ratings
+- Clean typography
+- Looks like a McKinsey consulting report
+- NO CSS comments anywhere in the style tag`;
 }
 
 module.exports = { generateReport };
