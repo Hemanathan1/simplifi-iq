@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { leadSchema } = require('./validation');
 const { processLead } = require('../pipeline');
-const { logger } = require('../index');
+const { logger } = require('../logger');
 
 const router = express.Router();
 
